@@ -1,42 +1,50 @@
 # Key Lifecycle
 
-**Status:** implementation candidate under test. A passing build does not constitute an independent security audit.
+**Status:** working interactive teaching implementation with automated checks. Passing CI or successful publication is not a formal security audit. GitHub Pages publication includes an explicit source-SHA check against served bytes.
 
 ## What It Is
 
-Encrypt fictional records, copy an old key, rotate, and verify why captured ciphertext remains exposed. Uses synthetic examples, locally in the browser. **Not production cryptography or a security product.**
+A browser-only incident-response demonstration using genuine WebCrypto AES-256-GCM. Encrypt three fictional library records with Key A, rotate future writes to Key B, give an attacker a real copy of Key A, and watch the attacker authenticate and decrypt an archived record. Keys and records are synthetic, created in browser memory, and never uploaded. This is not a production key manager.
 
 ## Exhibits
 
-The interactive workbench in `src/main.ts` executes real cryptographic operations and shows the measured result, its operational limitation, and independently checked failure cases. See `brief.md` for the complete target.
+1. **Encrypt:** create three AES-GCM records with fresh 96-bit IVs, 128-bit tags, and record/epoch-bound additional authenticated data.
+2. **Rotate:** create Key B without silently rewriting Key-A ciphertext.
+3. **Compromise:** copy the original Key A and archived ciphertext, then actually decrypt and authenticate with the attacker-held key.
+4. **Respond:** re-encrypt the library's current copies, retire its reference to Key A, and check why the archived stolen snapshot remains exposed.
+5. **Tamper:** flip a ciphertext bit and require the genuine GCM decrypt to reject it; a missing old key is not misreported as an integrity success.
 
 ## When to Use It
 
-Use to learn the named cryptographic principle. Do **not** supply actual secrets or use the lab as a key manager, attack tool or signature service.
+Authenticated decryption establishes integrity under the supplied key; it does not establish who has copies of that key. Key rotation protects new encryption, not pre-existing ciphertext already exposed with a compromised old key.
+
+**Do not use:** This code with real keys, credentials, signatures, records or adversaries. The experiment isolates one mechanism; it is not a deployable cryptographic service.
 
 ## Live Demo
 
-Planned: https://systemslibrarian.github.io/crypto-lab-key-lifecycle/ — not verified live until GitHub Pages is configured, the checks pass, and served bytes are inspected.
+[Open Key Lifecycle](https://systemslibrarian.github.io/crypto-lab-key-lifecycle/). Publication is performed through GitHub Actions. The deploy job checks that the page serves the exact source commit before reporting a successful deployment. If this check fails, the public site must be treated as **unverified** even if an earlier artifact was published.
 
 ## What Can Go Wrong
 
-The lesson's negative claim must stay visible when all of the relevant primitive's mathematical checks pass. See `brief.md`.
+Key loss can make historical ciphertext unreadable; a copied key can still decrypt archived ciphertext after retirement. Neither deleting an in-memory reference nor completing re-encryption means secure erasure of an adversary's data.
 
 ## Real-World Usage
 
-See the standards linked from `brief.md`. Browser-only teaching examples are not full deployed protocols.
+NIST SP 800-38D (AES-GCM); NIST SP 800-57 (key management). Related: [Envelope KMS](https://systemslibrarian.github.io/crypto-lab-envelope-kms/), [PQ Rotation](https://systemslibrarian.github.io/crypto-lab-pq-rotation/), [Ghost Commit](https://systemslibrarian.github.io/crypto-lab-ghost-commit/).
 
 ## How to Run Locally
 
-`npm install` (generates the lockfile), `npm test`, `npm run build`, `npm run test:a11y`, `npm run dev`.
+Install with `npm ci`, run `npm test`, `npm run build`, and `npm run test:a11y` before using `npm run dev`. Browser tests serve a freshly rebuilt production artifact. Do not skip the accessibility or correctness gate.
 
 ## Related Demos
 
-https://crypto-lab.systemslibrarian.dev/
+NIST SP 800-38D (AES-GCM); NIST SP 800-57 (key management). Related: [Envelope KMS](https://systemslibrarian.github.io/crypto-lab-envelope-kms/), [PQ Rotation](https://systemslibrarian.github.io/crypto-lab-pq-rotation/), [Ghost Commit](https://systemslibrarian.github.io/crypto-lab-ghost-commit/).
 
 ## Build & Verify
 
-`npm test` runs Vitest crypto KATs/behavior tests; `npm run test:a11y` runs real Playwright browser interaction and accessibility checks on a freshly built Vite preview. Treat browser and deployment checks as unverified until CI reports success; source alone does not prove a production deployment. Do not claim any formal security audit.
+The suite covers the NIST SP 800-38D all-zero AES-256-GCM known-answer tag, authenticated round trips, wrong keys, tag and AAD tampering, lifecycle transitions, captured-key decryption and missing-key failure. Playwright exercises the actual incident path and accessibility at desktop and mobile widths.
+
+CI runs Vitest and Playwright, checks the production build, and refuses deployment on failures. After the Pages publish step, a fresh HTTP GET must return `deployment.json` identifying the exact `GITHUB_SHA` and GitHub repository, and a second GET must return HTML containing the app mount. The hosted source SHA is **deployed build identity evidence**, not a cryptographic security proof. Full negative-claim and mutation-test compliance remains subject to independent review.
 
 ---
 
