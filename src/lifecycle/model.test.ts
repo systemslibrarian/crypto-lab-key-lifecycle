@@ -10,4 +10,5 @@ test('rotation does not change old ciphertext; actual attacker decrypt still suc
 test('invalid state transitions and tamper never pass silently',async()=>{const s=new KeyLifecycle();await expect(s.rotate()).rejects.toThrow();await s.prepare();
  await expect(s.prepare()).rejects.toThrow();await s.rotate();await expect(s.rotate()).rejects.toThrow();
  expect(await s.tamperTrial()).toBe(true);await s.retire();await expect(s.read(s.records[0]!)).rejects.toThrow(/Historical key/);
+ await expect(s.tamperTrial()).rejects.toThrow(/Historical key unavailable/);
 });
