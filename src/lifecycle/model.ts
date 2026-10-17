@@ -34,8 +34,8 @@ export class KeyLifecycle{
     const result:SealedRecord[]=[];
     for(const rec of this.records){
       const old=this.keys.get(rec.epoch);if(!old)throw new Error('Missing historical key; re-encryption stopped');
-      await open(old,rec); // authenticates actual original, fail-closed
-      result.push(await seal(this.keys.get(2)!,rec.id,2,this.used));n++;
+      const original=await open(old,rec); // authenticates actual original, fail-closed
+      result.push(await seal(this.keys.get(2)!,rec.id,2,this.used,original));n++;
     }
     this.records=result;this.log.push(n+' remaining records re-encrypted under Key B; attacker retains earlier snapshot.');
   }
