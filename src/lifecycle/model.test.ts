@@ -12,3 +12,5 @@ test('invalid state transitions and tamper never pass silently',async()=>{const 
  expect(await s.tamperTrial()).toBe(true);await s.retire();await expect(s.read(s.records[0]!)).rejects.toThrow(/Historical key/);
  await expect(s.tamperTrial()).rejects.toThrow(/Historical key unavailable/);
 });
+
+test('missing historical key cannot masquerade as successful authentication rejection',async()=>{const s=new KeyLifecycle();await s.prepare();await s.rotate();await s.retire();await expect(s.tamperTrial()).rejects.toThrow(/Historical key unavailable/);});
