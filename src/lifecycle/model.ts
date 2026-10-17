@@ -42,8 +42,15 @@ export class KeyLifecycle{
   async retire(){if(!this.rotated)throw new Error('Rotate before retirement');this.keys.delete(1);this.revoked=true;this.log.push('Key A discarded from the training model. The attacker still holds their copy.');}
   async read(rec:SealedRecord){const key=this.keys.get(rec.epoch);if(!key)throw new Error('Historical key unavailable');return open(key,rec);}
   async tamperTrial(){if(!this.ready)throw new Error('Prepare first');const rec=this.records[0]!;
+    if(!this.keys.has(rec.epoch))throw new Error('Historical key unavailable: tamper check cannot run');
+    // Authenticate the untouched record first. A missing key or already-invalid record
+    // must not be misreported as a successful tamper rejection.
+    await this.read(rec);
     const altered={...rec,ciphertext:rec.ciphertext.slice()};altered.ciphertext[0]=(altered.ciphertext[0]??0)^1;
-    try{await this.read(altered);return false;}catch{return true;}
+    try{await this.read(altered);return false;}catch(error){
+      if((error as Error)?.name==='OperationError')return true;
+      throw error;
+    }
   }
   view(){return this.records.map(r=>({id:r.id,epoch:r.epoch,cipherBytes:r.ciphertext.length,iv:hex(r.iv).slice(0,12),readable:this.keys.has(r.epoch)}));}
 }
