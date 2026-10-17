@@ -18,7 +18,7 @@ export async function open(key:CryptoKey,rec:SealedRecord):Promise<string>{
   // Recompute AAD independently from record identity rather than trusting a mutable field.
   const expected=aadFor(rec.id,rec.epoch);
   if(hex(rec.aad)!==hex(expected))throw new Error('Record identity or AAD does not match');
-  return new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:rec.iv,additionalData:expected,tagLength:128},key,rec.ciphertext));
+  return new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(rec.iv),additionalData:new Uint8Array(expected),tagLength:128},key,new Uint8Array(rec.ciphertext)));
 }
 export async function copiedKey(key:CryptoKey):Promise<CryptoKey>{
   const raw=new Uint8Array(await crypto.subtle.exportKey('raw',key));
