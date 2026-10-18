@@ -14,6 +14,14 @@ A browser-only incident-response demonstration using genuine WebCrypto AES-256-G
 4. **Respond:** re-encrypt the library's current copies, retire its reference to Key A, and check why the archived stolen snapshot remains exposed.
 5. **Tamper:** flip a ciphertext bit and require the genuine GCM decrypt to reject it; a missing old key is not misreported as an integrity success.
 
+## Guided lifecycle path
+
+The optional [ten-stage journey](https://systemslibrarian.github.io/crypto-lab-key-lifecycle/#guided-path) connects generation, transfer and verification, purpose-specific use, rotation, protected storage, backup and recovery, compromise response, key lifetimes, destruction and public-key trust. Each stage gives a concrete library scenario, two choices with separate explanations, and a deeper exhibit or primary reference. Learners can compare alternatives and revisit stages.
+
+These decisions are teaching scenarios: they do not implement key transfer, persistent storage, backup, revocation or secure erasure. The existing AES-GCM incident experiment remains the executable cryptographic component. References: [NIST SP 800-57 Part 1 Rev. 5](https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final) and [SP 800-88 Rev. 2](https://csrc.nist.gov/pubs/sp/800/88/r2/final).
+
+The [Applied Cryptography reading path](https://crypto-lab.systemslibrarian.dev/learn/applied-cryptography/) connects this exhibit to Chapter 8 and the rest of the collection.
+
 ## When to Use It
 
 Authenticated decryption establishes integrity under the supplied key; it does not establish who has copies of that key. Key rotation protects new encryption, not pre-existing ciphertext already exposed with a compromised old key.
