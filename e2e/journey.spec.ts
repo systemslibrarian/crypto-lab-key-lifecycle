@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import {auditControlNames,formatControlNameFailures} from './control-names';
 test('all ten lifecycle decisions explain alternatives and preserve the live incident',async({page})=>{
  await page.setViewportSize({width:390,height:850});await page.goto('./#guided-path');
  await expect(page.locator('.journey-stages button')).toHaveCount(10);
@@ -13,5 +14,7 @@ test('all ten lifecycle decisions explain alternatives and preserve the live inc
  await expect(page.locator('#journey-progress')).toContainText('10 decisions explored');await expect(page.locator('#journey-next')).toBeDisabled();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
  expect((await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze()).violations).toEqual([]);
+ // axe's `label` rule accepts a bare `placeholder` as an accessible name, so a deleted label can leave this gate green. See `control-names.ts`.
+ expect(formatControlNameFailures(await auditControlNames(page)),'form controls named only by placeholder/title').toEqual([]);
  await page.locator('#prepare').click();await expect(page.locator('#records tr')).toHaveCount(3);
 });
