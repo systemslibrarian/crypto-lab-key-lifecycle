@@ -10,6 +10,11 @@ export class KeyLifecycle{
   compromised=false;
   revoked=false;
   log:string[]=[];
+  get copyStatus(): string {
+    return this.attackerKey && this.archived
+      ? 'The independently held Key A and captured epoch-1 ciphertext remain together.'
+      : 'No external key and ciphertext copy was captured in this scenario.';
+  }
   get ready(){return this.epoch!==0;}
   get rotated(){return this.epoch>1;}
   async prepare(){if(this.ready)throw new Error('Scenario already prepared');
@@ -22,7 +27,10 @@ export class KeyLifecycle{
   }
   async compromise(){if(!this.rotated)throw new Error('Rotate Key B first');if(this.attackerKey)throw new Error('Attacker already holds a copied key');
     const key=this.keys.get(1);if(!key)throw new Error('Historical key unavailable');
-    this.attackerKey=await copiedKey(key);this.archived={...this.records[0]!,iv:this.records[0]!.iv.slice(),aad:this.records[0]!.aad.slice(),ciphertext:this.records[0]!.ciphertext.slice()};
+    const historical = this.records.find(record => record.epoch === 1);
+    if (!historical) throw new Error('No epoch-1 ciphertext remains to copy in this scenario.');
+    this.attackerKey = await copiedKey(key);
+    this.archived = { ...historical, iv: historical.iv.slice(), aad: historical.aad.slice(), ciphertext: historical.ciphertext.slice() };
     this.compromised=true;this.log.push('Attacker captured Key A and an old ciphertext; captured copies cannot be recalled.');
   }
   async attackDecrypt():Promise<Incident>{if(!this.attackerKey||!this.archived)throw new Error('No copied key and ciphertext');
@@ -37,9 +45,9 @@ export class KeyLifecycle{
       const original=await open(old,rec); // authenticates actual original, fail-closed
       result.push(await seal(this.keys.get(2)!,rec.id,2,this.used,original));n++;
     }
-    this.records=result;this.log.push(n+' remaining records re-encrypted under Key B; attacker retains earlier snapshot.');
+    this.records=result;this.log.push(n+' remaining records re-encrypted under Key B. '+this.copyStatus);
   }
-  async retire(){if(!this.rotated)throw new Error('Rotate before retirement');this.keys.delete(1);this.revoked=true;this.log.push('Key A discarded from the training model. The attacker still holds their copy.');}
+  async retire(){if(!this.rotated)throw new Error('Rotate before retirement');this.keys.delete(1);this.revoked=true;this.log.push('Key A discarded from the training model. '+this.copyStatus);}
   async read(rec:SealedRecord){const key=this.keys.get(rec.epoch);if(!key)throw new Error('Historical key unavailable');return open(key,rec);}
   async tamperTrial(){if(!this.ready)throw new Error('Prepare first');const rec=this.records[0]!;
     if(!this.keys.has(rec.epoch))throw new Error('Historical key unavailable: tamper check cannot run');

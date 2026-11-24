@@ -11,18 +11,49 @@ root.innerHTML=`<section class="panel"><p class="eyebrow">One question · one ex
 const $=(id:string)=>document.getElementById(id)!;
 function result(title:string,detail:string,tone:'safe'|'warn'|'danger'='warn'){const e=$('outcome');e.dataset.tone=tone;e.replaceChildren();const strong=document.createElement('strong');strong.textContent=title;const p=document.createElement('p');p.textContent=detail;e.append(strong,p);}
 function draw(){const m=model;$('active-key').textContent=m.ready?'Key '+(m.epoch===1?'A':'B')+' · epoch '+m.epoch:'None';$('stolen-key').textContent=m.attackerKey?'Key A — copied externally':'None';
- $('prepare').toggleAttribute('disabled',m.ready);$('rotate').toggleAttribute('disabled',!m.ready||m.rotated);$('capture').toggleAttribute('disabled',!m.rotated||!!m.attackerKey||!m.keys.has(1));$('attack').toggleAttribute('disabled',!m.attackerKey);$('reencrypt').toggleAttribute('disabled',!m.rotated||m.records.every(r=>r.epoch===2));$('retire').toggleAttribute('disabled',!m.rotated||m.revoked);$('tamper').toggleAttribute('disabled',!m.ready||!m.records.length||!m.keys.has(m.records[0]!.epoch));
+ $('prepare').toggleAttribute('disabled',m.ready);$('rotate').toggleAttribute('disabled',!m.ready||m.rotated);$('capture').toggleAttribute('disabled',!m.rotated||!!m.attackerKey||!m.keys.has(1)||!m.records.some(record=>record.epoch===1));$('attack').toggleAttribute('disabled',!m.attackerKey);$('reencrypt').toggleAttribute('disabled',!m.rotated||m.records.every(r=>r.epoch===2));$('retire').toggleAttribute('disabled',!m.rotated||m.revoked);$('tamper').toggleAttribute('disabled',!m.ready||!m.records.length||!m.keys.has(m.records[0]!.epoch));
  const tb=$('records');tb.replaceChildren();for(const r of m.view()){let tr=document.createElement('tr');for(const txt of [r.id,'Key '+(r.epoch===1?'A':'B')+' (epoch '+r.epoch+')',r.readable?'Yes':'No — historical key unavailable',String(r.cipherBytes)]){const td=document.createElement('td');td.textContent=txt;tr.append(td);}tb.append(tr);}if(!m.records.length)tb.innerHTML='<tr><td colspan="4">No data yet</td></tr>';
  const list=$('timeline');list.replaceChildren();for(const txt of m.log){const li=document.createElement('li');li.textContent=txt;list.append(li);}if(!m.log.length)list.innerHTML='<li>Prepare → Rotate → Copy → Decrypt → Respond</li>';
  $('tech').textContent='Authenticated record IV prefix: '+(m.records[0]?hex(m.records[0].iv).slice(0,24):'none')+'. Library key epochs held: '+[...m.keys.keys()].join(', ')+'.';}
-async function run(fn:()=>Promise<void>){try{await fn();draw();}catch(e){result('Operation rejected',e instanceof Error?e.message:'Unknown failure','danger');draw();}}
-$('prepare').addEventListener('click',()=>run(async()=>{await model.prepare();result('AUTHENTICATED — encrypted with A','Three records hold genuine AES-GCM ciphertext.','safe');}));
-$('rotate').addEventListener('click',()=>run(async()=>{await model.rotate();result('ROTATED — old records still use A','New writes use Key B. Rotation did not change existing ciphertext.','warn');}));
-$('capture').addEventListener('click',()=>run(async()=>{await model.compromise();result('INCIDENT — OLD KEY COPIED','The attacker has an independent Key A and an original encrypted record.','danger');}));
-$('attack').addEventListener('click',()=>run(async()=>{const x=await model.attackDecrypt();$('attack-result').textContent='Attacker actually decrypted: '+x.message;result('AUTHENTICATED — CONFIDENTIALITY LOST','AES-GCM verified the ciphertext but the adversary owns the old key. A valid tag cannot detect key theft.','danger');$('explanation').textContent='A genuine decrypt succeeded using the copied historical key. Cipher security and operational key secrecy are separate claims.';}));
-$('reencrypt').addEventListener('click',()=>run(async()=>{await model.reencrypt();result('RE-ENCRYPTED — EARLIER COPY STILL EXPOSED','Library copies now use fresh Key B; the attacker can still decrypt the captured Key-A snapshot.','danger');}));
-$('retire').addEventListener('click',()=>run(async()=>{await model.retire();result('KEY A UNAVAILABLE HERE','The library cannot use A to read any remaining epoch-1 records. The attacker still has their captured copy.','warn');}));
-$('tamper').addEventListener('click',()=>run(async()=>{const rejected=await model.tamperTrial();result(rejected?'TAMPERING REJECTED':'UNEXPECTED AUTHENTICATION',rejected?'AES-GCM rejected a modified ciphertext byte.':'A modified ciphertext was accepted; this is a defect!',rejected?'safe':'danger');}));
+let pending: KeyLifecycle | undefined;
+async function run<T>(work: (incident: KeyLifecycle) => Promise<T>, publish: (value: T) => void) {
+  const incident = model;
+  if (pending === incident) return;
+  pending = incident;
+  for (const id of ['prepare','rotate','capture','attack','reencrypt','retire','tamper']) {
+    ($(id) as HTMLButtonElement).disabled = true;
+  }
+  try {
+    const value = await work(incident);
+    if (model === incident) publish(value);
+  } catch (error) {
+    if (model === incident) result('Operation rejected', error instanceof Error ? error.message : 'Unknown failure', 'danger');
+  } finally {
+    if (pending === incident) pending = undefined;
+    if (model === incident) draw();
+  }
+}
+$('prepare').addEventListener('click', () => run(m => m.prepare(), () =>
+  result('AUTHENTICATED — encrypted with A','Three records hold genuine AES-GCM ciphertext.','safe')));
+$('rotate').addEventListener('click', () => run(m => m.rotate(), () =>
+  result('ROTATED — old records still use A','New writes use Key B. Rotation did not change existing ciphertext.','warn')));
+$('capture').addEventListener('click', () => run(m => m.compromise(), () =>
+  result('INCIDENT — OLD KEY COPIED','The attacker has an independent Key A and an original encrypted record.','danger')));
+$('attack').addEventListener('click', () => run(m => m.attackDecrypt(), incident => {
+  $('attack-result').textContent='Attacker actually decrypted: '+incident.message;
+  result('AUTHENTICATED — CONFIDENTIALITY LOST','AES-GCM verified the ciphertext but the adversary owns the old key. A valid tag cannot detect key theft.','danger');
+  $('explanation').textContent='A genuine decrypt succeeded using the copied historical key. Cipher security and operational key secrecy are separate claims.';
+}));
+$('reencrypt').addEventListener('click', () => run(m => m.reencrypt(), () => {
+  const captured = Boolean(model.attackerKey && model.archived);
+  result(captured ? 'RE-ENCRYPTED — EARLIER COPY STILL EXPOSED' : 'RE-ENCRYPTED UNDER KEY B',
+    'Library copies now use Key B. '+model.copyStatus, captured ? 'danger' : 'safe');
+}));
+$('retire').addEventListener('click', () => run(m => m.retire(), () =>
+  result('KEY A UNAVAILABLE HERE','The library cannot use A to read any remaining epoch-1 records. '+model.copyStatus,'warn')));
+$('tamper').addEventListener('click', () => run(m => m.tamperTrial(), rejected =>
+  result(rejected?'TAMPERING REJECTED':'UNEXPECTED AUTHENTICATION',
+    rejected?'AES-GCM rejected a modified ciphertext byte.':'A modified ciphertext was accepted; this is a defect!',rejected?'safe':'danger')));
 $('reset').addEventListener('click',()=>{model=new KeyLifecycle();$('attack-result').textContent='';$('explanation').textContent='Start by encrypting fictional records.';result('Reset complete','No keys or records persisted. Memory cleanup is not guaranteed secure erasure.');draw();});draw();
 
 mountJourney(root);

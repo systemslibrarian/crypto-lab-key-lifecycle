@@ -14,3 +14,13 @@ test('invalid state transitions and tamper never pass silently',async()=>{const 
 });
 
 test('missing historical key cannot masquerade as successful authentication rejection',async()=>{const s=new KeyLifecycle();await s.prepare();await s.rotate();await s.retire();await expect(s.tamperTrial()).rejects.toThrow(/Historical key unavailable/);});
+
+test('capture after migration cannot pair an old key with a new ciphertext', async () => {
+  const lifecycle = new KeyLifecycle();
+  await lifecycle.prepare();
+  await lifecycle.rotate();
+  await lifecycle.reencrypt();
+  await expect(lifecycle.compromise()).rejects.toThrow('No epoch-1 ciphertext remains');
+  expect(lifecycle.attackerKey).toBeUndefined();
+  expect(lifecycle.archived).toBeUndefined();
+});
